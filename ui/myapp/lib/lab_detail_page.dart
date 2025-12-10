@@ -21,94 +21,88 @@ class _LabDetailPageState extends State<LabDetailPage> {
   final TextEditingController _urlController = TextEditingController();
   String? _errorMessage;
 
-Future<void> uploadVideo() async {
-  final picker = ImagePicker();
-  final XFile? file = await picker.pickVideo(source: ImageSource.gallery);
-  if (file == null) return;
+  Future<void> uploadVideo() async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickVideo(source: ImageSource.gallery);
+    if (file == null) return;
 
-  setState(() {
-    _loading = true;
-    result = 0;
-    _errorMessage = null;
-  });
+    setState(() {
+      _loading = true;
+      result = 0;
+      _errorMessage = null;
+    });
 
-  final backendBase = getBackendBaseUrl();
-  final String backendUrl = '$backendBase/process_video_file';
+    final backendBase = getBackendBaseUrl();
+    final String backendUrl = '$backendBase/process_video_file';
 
-  print("UPLOAD URL => $backendUrl");
-  print("VIDEO PATH => ${file.path}");
-  print("LAB NAME => ${widget.labName}");
+    print("UPLOAD URL => $backendUrl");
+    print("VIDEO PATH => ${file.path}");
+    print("LAB NAME => ${widget.labName}");
 
-  try {
-    final req = http.MultipartRequest("POST", Uri.parse(backendUrl));
+    try {
+      final req = http.MultipartRequest("POST", Uri.parse(backendUrl));
 
-    req.files.add(
-      await http.MultipartFile.fromPath(
-        "file",
-        file.path,
-      ),
-    );
-    
-    // ✅ ADD LAB NAME TO REQUEST
-    req.fields['lab_name'] = widget.labName;
+      req.files.add(await http.MultipartFile.fromPath("file", file.path));
 
-    final streamed = await req.send();
-    final response = await http.Response.fromStream(streamed);
+      // ✅ ADD LAB NAME TO REQUEST
+      req.fields['lab_name'] = widget.labName;
 
-    print("STATUS CODE => ${response.statusCode}");
-    print("RESPONSE BODY => ${response.body}");
+      final streamed = await req.send();
+      final response = await http.Response.fromStream(streamed);
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
+      print("STATUS CODE => ${response.statusCode}");
+      print("RESPONSE BODY => ${response.body}");
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        setState(() {
+          result = -1;
+          _errorMessage =
+              'Server error: ${response.statusCode} ${response.reasonPhrase}';
+          _loading = false;
+        });
+        return;
+      }
+
+      // ✅ Start polling safely
+      timer = Timer.periodic(const Duration(seconds: 1), (_) async {
+        try {
+          final countRes = await http.get(Uri.parse('$backendBase/count'));
+
+          if (countRes.statusCode == 200) {
+            final data = jsonDecode(countRes.body);
+
+            print("📊 POLL RESPONSE: $data");
+            print("📊 LAB NAME: ${widget.labName}");
+
+            // ✅ GET COUNT FROM THE SPECIFIC LAB
+            final labs = data["labs"] ?? {};
+            final labCount = labs[widget.labName] ?? 0;
+
+            print("📊 LAB COUNT: $labCount");
+
+            setState(() {
+              result = labCount;
+              _errorMessage = null;
+            });
+
+            if (data["processing"] == false) {
+              timer?.cancel();
+              setState(() => _loading = false);
+            }
+          }
+        } catch (e) {
+          print("❌ POLLING ERROR: $e");
+          setState(() => _errorMessage = 'Polling error: $e');
+        }
+      });
+    } catch (e) {
       setState(() {
         result = -1;
-        _errorMessage =
-            'Server error: ${response.statusCode} ${response.reasonPhrase}';
+        _errorMessage = 'Upload error: $e';
         _loading = false;
       });
-      return;
     }
-
-    // ✅ Start polling safely
-    timer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      try {
-        final countRes =
-            await http.get(Uri.parse('$backendBase/count'));
-
-        if (countRes.statusCode == 200) {
-          final data = jsonDecode(countRes.body);
-          
-          print("📊 POLL RESPONSE: $data");
-          print("📊 LAB NAME: ${widget.labName}");
-          
-          // ✅ GET COUNT FROM THE SPECIFIC LAB
-          final labs = data["labs"] ?? {};
-          final labCount = labs[widget.labName] ?? 0;
-
-          print("📊 LAB COUNT: $labCount");
-
-          setState(() {
-            result = labCount;
-            _errorMessage = null;
-          });
-
-          if (data["processing"] == false) {
-            timer?.cancel();
-            setState(() => _loading = false);
-          }
-        }
-      } catch (e) {
-        print("❌ POLLING ERROR: $e");
-        setState(() => _errorMessage = 'Polling error: $e');
-      }
-    });
-  } catch (e) {
-    setState(() {
-      result = -1;
-      _errorMessage = 'Upload error: $e';
-      _loading = false;
-    });
   }
-}
 
   Future<void> processVideoUrl(String url) async {
     if (url.isEmpty) {
@@ -130,10 +124,7 @@ Future<void> uploadVideo() async {
         Uri.parse('$backendUrl/process_video_url'),
         headers: {'Content-Type': 'application/json'},
         // ✅ ADD LAB NAME TO REQUEST
-        body: jsonEncode({
-          'url': url,
-          'lab_name': widget.labName,
-        }),
+        body: jsonEncode({'url': url, 'lab_name': widget.labName}),
       );
 
       if (res.statusCode != 200 && res.statusCode != 201) {
@@ -151,16 +142,16 @@ Future<void> uploadVideo() async {
           final countRes = await http.get(Uri.parse('$backendUrl/count'));
           if (countRes.statusCode == 200) {
             final data = jsonDecode(countRes.body);
-            
+
             print("📊 POLL RESPONSE: $data");
             print("📊 LAB NAME: ${widget.labName}");
-            
+
             // ✅ GET COUNT FROM THE SPECIFIC LAB
             final labs = data["labs"] ?? {};
             final labCount = labs[widget.labName] ?? 0;
-            
+
             print("📊 LAB COUNT: $labCount");
-            
+
             setState(() {
               result = labCount;
               _errorMessage = null;
@@ -202,15 +193,14 @@ Future<void> uploadVideo() async {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: const Color(0xFF00ADB5),
-        elevation: 8,
-        shadowColor: const Color(0xFF00ADB5).withOpacity(0.5),
+        backgroundColor: const Color(0xFF1F1F1F),
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFF121212),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -219,19 +209,12 @@ Future<void> uploadVideo() async {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF00ADB5).withOpacity(0.9),
-                    const Color(0xFF00ADB5).withOpacity(0.6),
-                  ],
-                ),
+                color: const Color(0xFF1F1F1F),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00ADB5).withOpacity(0.3),
-                    blurRadius: 12,
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -241,7 +224,7 @@ Future<void> uploadVideo() async {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: const Color(0xFF00BCD4),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -254,8 +237,8 @@ Future<void> uploadVideo() async {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
+                      children: [
+                        const Text(
                           'Video Analysis',
                           style: TextStyle(
                             color: Colors.white,
@@ -263,10 +246,13 @@ Future<void> uploadVideo() async {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Upload or provide a video URL to detect unique students',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -280,12 +266,12 @@ Future<void> uploadVideo() async {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFF1F1F1F),
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 10,
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -298,36 +284,34 @@ Future<void> uploadVideo() async {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF222831),
+                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _urlController,
+                    style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Enter URL or file path',
+                      labelStyle: TextStyle(color: Colors.grey[400]),
                       prefixIcon: const Icon(
                         Icons.link,
-                        color: Color(0xFF00ADB5),
+                        color: Color(0xFF00BCD4),
                       ),
+                      filled: true,
+                      fillColor: const Color(0xFF2A2A2A),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF00ADB5),
-                          width: 1.5,
-                        ),
+                        borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: Colors.grey.withOpacity(0.3),
-                          width: 1.5,
-                        ),
+                        borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: const BorderSide(
-                          color: Color(0xFF00ADB5),
+                          color: Color(0xFF00BCD4),
                           width: 2,
                         ),
                       ),
@@ -347,7 +331,7 @@ Future<void> uploadVideo() async {
                       icon: const Icon(Icons.play_circle_outline),
                       label: const Text('Process Video'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00ADB5),
+                        backgroundColor: const Color(0xFF00BCD4),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -363,19 +347,19 @@ Future<void> uploadVideo() async {
             const SizedBox(height: 16),
 
             // Divider
-            Container(height: 1, color: Colors.grey.withOpacity(0.3)),
+            Container(height: 1, color: Colors.grey.withOpacity(0.2)),
             const SizedBox(height: 16),
 
             // Upload Card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFF1F1F1F),
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 10,
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -388,7 +372,7 @@ Future<void> uploadVideo() async {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF222831),
+                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -399,7 +383,7 @@ Future<void> uploadVideo() async {
                       icon: const Icon(Icons.cloud_upload_outlined),
                       label: const Text('Select Video File'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
+                        backgroundColor: const Color(0xFF00BCD4),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -419,29 +403,22 @@ Future<void> uploadVideo() async {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: _loading
-                        ? [
-                            Colors.blue.withOpacity(0.8),
-                            Colors.cyan.withOpacity(0.6),
-                          ]
-                        : (result == -1
-                              ? [
-                                  Colors.red.withOpacity(0.8),
-                                  Colors.redAccent.withOpacity(0.6),
-                                ]
-                              : [
-                                  Colors.green.withOpacity(0.8),
-                                  Colors.teal.withOpacity(0.6),
-                                ]),
-                  ),
+                  color: _loading
+                      ? const Color(0xFF1F1F1F)
+                      : (result == -1
+                            ? const Color(0xFF1F1F1F)
+                            : const Color(0xFF1F1F1F)),
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _loading
+                        ? const Color(0xFF00BCD4)
+                        : (result == -1 ? Colors.red : Colors.green),
+                    width: 2,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 12,
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
                   ],
@@ -475,8 +452,8 @@ Future<void> uploadVideo() async {
                           if (result != null)
                             Text(
                               'Detected so far: $result students',
-                              style: const TextStyle(
-                                color: Colors.white70,
+                              style: TextStyle(
+                                color: Colors.grey[400],
                                 fontSize: 16,
                               ),
                             ),
@@ -543,19 +520,19 @@ Future<void> uploadVideo() async {
                               horizontal: 24,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: const Color(0xFF2A2A2A),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
+                                color: const Color(0xFF00BCD4),
                                 width: 2,
                               ),
                             ),
                             child: Column(
                               children: [
-                                const Text(
+                                Text(
                                   'Total Students Detected',
                                   style: TextStyle(
-                                    color: Colors.white70,
+                                    color: Colors.grey[400],
                                     fontSize: 14,
                                   ),
                                 ),
@@ -583,4 +560,3 @@ Future<void> uploadVideo() async {
     );
   }
 }
-

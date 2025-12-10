@@ -13,7 +13,7 @@ class OccupancyPage extends StatefulWidget {
 }
 
 class _OccupancyPageState extends State<OccupancyPage>
-    with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
+    with AutomaticKeepAliveClientMixin {
   final String backend = getBackendBaseUrl(); // backend URL helper
 
   int labA1 = 0, labA2 = 0, labB1 = 0, labB2 = 0, labC1 = 0;
@@ -21,7 +21,6 @@ class _OccupancyPageState extends State<OccupancyPage>
   String processingLab = '';
 
   Timer? timer;
-  late TabController _tabController;
 
   @override
   bool get wantKeepAlive => true;
@@ -29,13 +28,11 @@ class _OccupancyPageState extends State<OccupancyPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     startPolling();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     timer?.cancel();
     super.dispose();
   }
@@ -70,7 +67,7 @@ class _OccupancyPageState extends State<OccupancyPage>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         title: const Text(
           '🏫 Lab Occupancy',
@@ -80,28 +77,10 @@ class _OccupancyPageState extends State<OccupancyPage>
             fontSize: 22,
           ),
         ),
-        backgroundColor: const Color(0xFF00ADB5),
-        elevation: 8,
-        shadowColor: const Color(0xFF00ADB5).withOpacity(0.5),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: Colors.white,
-            indicatorWeight: 4,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white.withOpacity(0.6),
-            tabs: const [
-              Tab(text: '💻 Labs'),
-              Tab(text: '🏢 Classrooms'),
-            ],
-          ),
-        ),
+        backgroundColor: const Color(0xFF1F1F1F),
+        elevation: 0,
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [_buildLabsView(), _buildClassroomsView()],
-      ),
+      body: _buildLabsView(),
     );
   }
 
@@ -116,23 +95,34 @@ class _OccupancyPageState extends State<OccupancyPage>
           Icons.computer,
           (processing && processingLab == 'Python LAB'),
         ),
-        _buildOccupancyCard('NETWORK LAB', labA2, 30, Icons.computer, (processing && processingLab == 'NETWORK LAB')),
-        _buildOccupancyCard('LANGUAGE LAB', labB1, 25, Icons.computer, (processing && processingLab == 'LANGUAGE LAB')),
-        _buildOccupancyCard('MOCK LAB', labB2, 25, Icons.computer, (processing && processingLab == 'MOCK LAB')),
-        _buildOccupancyCard('ILP LAB', labC1, 30, Icons.computer, (processing && processingLab == 'ILP LAB')),
-      ],
-    );
-  }
-
-  Widget _buildClassroomsView() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildOccupancyCard('Room 101', 45, 50, Icons.meeting_room, false),
-        _buildOccupancyCard('Room 102', 50, 50, Icons.meeting_room, false),
-        _buildOccupancyCard('Room 201', 30, 60, Icons.meeting_room, false),
-        _buildOccupancyCard('Room 202', 0, 60, Icons.meeting_room, false),
-        _buildOccupancyCard('Room 301', 55, 80, Icons.meeting_room, false),
+        _buildOccupancyCard(
+          'NETWORK LAB',
+          labA2,
+          30,
+          Icons.computer,
+          (processing && processingLab == 'NETWORK LAB'),
+        ),
+        _buildOccupancyCard(
+          'LANGUAGE LAB',
+          labB1,
+          25,
+          Icons.computer,
+          (processing && processingLab == 'LANGUAGE LAB'),
+        ),
+        _buildOccupancyCard(
+          'MOCK LAB',
+          labB2,
+          25,
+          Icons.computer,
+          (processing && processingLab == 'MOCK LAB'),
+        ),
+        _buildOccupancyCard(
+          'ILP LAB',
+          labC1,
+          30,
+          Icons.computer,
+          (processing && processingLab == 'ILP LAB'),
+        ),
       ],
     );
   }
@@ -149,24 +139,14 @@ class _OccupancyPageState extends State<OccupancyPage>
         : 0.0;
 
     Color statusColor;
-    Color gradientStart;
-    Color gradientEnd;
     if (percentage >= 90) {
       statusColor = Colors.red;
-      gradientStart = Colors.red.withOpacity(0.8);
-      gradientEnd = Colors.redAccent.withOpacity(0.4);
     } else if (percentage >= 70) {
       statusColor = Colors.orange;
-      gradientStart = Colors.orange.withOpacity(0.8);
-      gradientEnd = Colors.amber.withOpacity(0.4);
     } else if (percentage > 0) {
       statusColor = Colors.green;
-      gradientStart = Colors.green.withOpacity(0.8);
-      gradientEnd = Colors.teal.withOpacity(0.4);
     } else {
       statusColor = Colors.grey;
-      gradientStart = Colors.grey.withOpacity(0.6);
-      gradientEnd = Colors.blueGrey.withOpacity(0.3);
     }
 
     return GestureDetector(
@@ -178,39 +158,19 @@ class _OccupancyPageState extends State<OccupancyPage>
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [gradientStart, gradientEnd],
-          ),
+          color: const Color(0xFF1F1F1F),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: statusColor.withOpacity(0.5), width: 2),
           boxShadow: [
             BoxShadow(
-              color: statusColor.withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-              spreadRadius: 1,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.3),
               blurRadius: 8,
-              offset: const Offset(0, 2),
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.white.withOpacity(0.95),
-                Colors.white.withOpacity(0.85),
-              ],
-            ),
-          ),
           child: Column(
             children: [
               Row(
@@ -218,15 +178,10 @@ class _OccupancyPageState extends State<OccupancyPage>
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          statusColor.withOpacity(0.3),
-                          statusColor.withOpacity(0.1),
-                        ],
-                      ),
+                      color: const Color(0xFF00BCD4),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(icon, color: statusColor, size: 28),
+                    child: Icon(icon, color: Colors.white, size: 28),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -238,7 +193,7 @@ class _OccupancyPageState extends State<OccupancyPage>
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF222831),
+                            color: Colors.white,
                           ),
                         ),
                         Text(
@@ -247,7 +202,7 @@ class _OccupancyPageState extends State<OccupancyPage>
                               : "$occupied / $capacity occupied",
                           style: TextStyle(
                             fontSize: 13,
-                            color: statusColor,
+                            color: Colors.grey[400],
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -260,17 +215,9 @@ class _OccupancyPageState extends State<OccupancyPage>
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          statusColor.withOpacity(0.15),
-                          statusColor.withOpacity(0.05),
-                        ],
-                      ),
+                      color: const Color(0xFF2A2A2A),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: statusColor.withOpacity(0.5),
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: statusColor, width: 2),
                     ),
                     child: Text(
                       '${percentage.toStringAsFixed(0)}%',
@@ -290,7 +237,7 @@ class _OccupancyPageState extends State<OccupancyPage>
                 child: LinearProgressIndicator(
                   value: percentage / 100,
                   minHeight: 8,
-                  backgroundColor: Colors.grey.withOpacity(0.2),
+                  backgroundColor: const Color(0xFF2A2A2A),
                   valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                 ),
               ),
